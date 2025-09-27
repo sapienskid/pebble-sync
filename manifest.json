@@ -1,0 +1,11 @@
+{
+  "id": "pebble-sync",
+  "name": "pebble sync",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Minimal plugin to import Pebble notes into Obsidian daily notes by creation date.",
+  "author": "sapienskid",
+  "authorUrl": "https://github.com/sapienskid",
+  "isDesktopOnly": false,
+  "main": "main.js"
+}
