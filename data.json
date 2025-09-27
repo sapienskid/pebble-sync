@@ -1,0 +1,31 @@
+{
+  "apiBaseUrl": "https://pebble.sp03201122.workers.dev",
+  "apiKey": "288ce1e75ca1e3075ce6cccdd654082ac2af040e54f9b94d87ffccc5627bc91e",
+  "useDailyNotesCore": true,
+  "dailyNoteTemplatePath": "",
+  "createDailyNotes": true,
+  "sectionHeading": "## Pebble",
+  "atomicNotesEnabled": true,
+  "atomicNotesFolder": "Notes",
+  "atomicNotesTags": "idea,thought",
+  "atomicNotesTemplateContent": "---\ntags: [idea, pebble]\naliases: [\"{{title}}\"]\ncreated: {{timestamp}}\n---\n\n{{content}}\n",
+  "embedInDailyNote": true,
+  "autoRunOnStartup": false,
+  "autoRunInterval": 0,
+  "dailyFolder": "",
+  "dailyFileNameFormat": "dddd, MMMM Do YYYY",
+  "templateFilePath": "Templates/daily_note_template",
+  "includeTags": true,
+  "timeFormat": "HH:mm",
+  "ensureFrontmatterTag": true,
+  "journalTag": "journal",
+  "addDateToFrontmatter": true,
+  "atomicNotesTemplatePath": "",
+  "linkBackToDailyNote": true,
+  "importedKeys": [
+    "2025-09-27T06:55:01.024Z|208a5a1c-f4e4-4fd4-851c-9ef6ff3efd13",
+    "2025-09-27T05:54:47.307Z|2ca6e95d-8dc1-4d48-a73b-711462770a97",
+    "2025-09-27T05:39:05.936Z|08f200ff-9456-434a-8e51-99a08966f2b7"
+  ],
+  "dateFormat": "YYYY-MM-DD"
+}
