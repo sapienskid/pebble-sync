@@ -1,9 +1,9 @@
 {
   "id": "pebble-sync",
-  "name": "pebble sync",
-  "version": "0.1.0",
+  "name": "Pebble Sync",
+  "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "Minimal plugin to import Pebble notes into Obsidian daily notes by creation date.",
+  "description": "Import Pebble notes into atomic notes and link them back to your daily notes.",
   "author": "sapienskid",
   "authorUrl": "https://github.com/sapienskid",
   "isDesktopOnly": false,

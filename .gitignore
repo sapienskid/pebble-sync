@@ -1,0 +1,6 @@
+data.json
+*.zip
+node_modules/
+dist/
+*.tsbuildinfo
+release/
