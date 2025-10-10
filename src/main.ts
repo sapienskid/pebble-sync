@@ -53,6 +53,7 @@ interface PebbleSyncSettings {
     atomicNotesEnabled: boolean;
     atomicNotesFolder: string;
     atomicNotesTags: string;
+    atomicNotesDefaultTag: string;
     atomicNotesTemplate: string;
     overwriteExisting: boolean;
     linkBackToDailyNote: boolean;
@@ -77,6 +78,7 @@ const DEFAULT_SETTINGS: PebbleSyncSettings = {
     atomicNotesEnabled: true,
     atomicNotesFolder: 'Pebble',
     atomicNotesTags: 'idea,thought',
+    atomicNotesDefaultTag: 'pebble',
     atomicNotesTemplate:
         `---
 created: {{fullDateTime}}
@@ -382,6 +384,12 @@ export default class PebbleSyncPlugin extends Plugin {
             return sanitizeFileName(tagName) || 'Pebble Note';
         }
 
+        const defaultTag = this.settings.atomicNotesDefaultTag.trim();
+        if (defaultTag) {
+            const tagName = defaultTag.charAt(0).toUpperCase() + defaultTag.slice(1);
+            return sanitizeFileName(tagName) || 'Pebble Note';
+        }
+
         const firstLine = (note.markdown || '').split('\n')[0]?.trim();
         if (firstLine) {
             const candidate = sanitizeFileName(firstLine.substring(0, 50) || 'Pebble Note');
@@ -503,6 +511,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
         if (this.plugin.settings.atomicNotesEnabled) {
             new Setting(containerEl).setName('Folder for atomic notes').addText(t => t.setPlaceholder('Pebble/Ideas').setValue(this.plugin.settings.atomicNotesFolder).onChange(async v => { this.plugin.settings.atomicNotesFolder = v.trim(); await this.plugin.saveSettings(); }));
             new Setting(containerEl).setName('Trigger tags for special titles').setDesc('Comma-separated. Notes with these tags will use the tag as a title (e.g., "Idea"). Others use the first line of content.').addText(t => t.setPlaceholder('idea, thought, fleeting').setValue(this.plugin.settings.atomicNotesTags).onChange(async v => { this.plugin.settings.atomicNotesTags = v; await this.plugin.saveSettings(); }));
+            new Setting(containerEl).setName('Default tag for title').setDesc('If no trigger tags are found, use this tag for the title. If empty, the first line of the note is used.').addText(t => t.setPlaceholder('pebble').setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async v => { this.plugin.settings.atomicNotesDefaultTag = v.trim(); await this.plugin.saveSettings(); }));
             new Setting(containerEl).setName('Atomic note template').setDesc('Available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string).').addTextArea(text => {
                 text.setValue(this.plugin.settings.atomicNotesTemplate).onChange(async (v) => { this.plugin.settings.atomicNotesTemplate = v; await this.plugin.saveSettings(); });
                 text.inputEl.rows = 8;

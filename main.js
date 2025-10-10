@@ -54,6 +54,7 @@ var DEFAULT_SETTINGS = {
   atomicNotesEnabled: true,
   atomicNotesFolder: "Pebble",
   atomicNotesTags: "idea,thought",
+  atomicNotesDefaultTag: "pebble",
   atomicNotesTemplate: `---
 created: {{fullDateTime}}
 tags: [pebble, {{tags}}]
@@ -317,6 +318,11 @@ ${embedLink}
       const tagName = matchingTag.charAt(0).toUpperCase() + matchingTag.slice(1);
       return sanitizeFileName(tagName) || "Pebble Note";
     }
+    const defaultTag = this.settings.atomicNotesDefaultTag.trim();
+    if (defaultTag) {
+      const tagName = defaultTag.charAt(0).toUpperCase() + defaultTag.slice(1);
+      return sanitizeFileName(tagName) || "Pebble Note";
+    }
     const firstLine = (_a = (note.markdown || "").split("\n")[0]) == null ? void 0 : _a.trim();
     if (firstLine) {
       const candidate = sanitizeFileName(firstLine.substring(0, 50) || "Pebble Note");
@@ -428,6 +434,10 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
       }));
       new import_obsidian.Setting(containerEl).setName("Trigger tags for special titles").setDesc('Comma-separated. Notes with these tags will use the tag as a title (e.g., "Idea"). Others use the first line of content.').addText((t) => t.setPlaceholder("idea, thought, fleeting").setValue(this.plugin.settings.atomicNotesTags).onChange(async (v) => {
         this.plugin.settings.atomicNotesTags = v;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Default tag for title").setDesc("If no trigger tags are found, use this tag for the title. If empty, the first line of the note is used.").addText((t) => t.setPlaceholder("pebble").setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async (v) => {
+        this.plugin.settings.atomicNotesDefaultTag = v.trim();
         await this.plugin.saveSettings();
       }));
       new import_obsidian.Setting(containerEl).setName("Atomic note template").setDesc("Available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string).").addTextArea((text) => {
