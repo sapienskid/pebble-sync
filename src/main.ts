@@ -314,6 +314,32 @@ export default class PebbleSyncPlugin extends Plugin {
         }
     }
 
+    async testApiConnection() {
+        const settings = this.settings;
+        const apiUrl = this.normalizeApiUrl(settings.apiUrl);
+
+        if (!apiUrl || !settings.apiKey) {
+            new Notice('Pebble Sync: API URL and API Key must be set before testing.');
+            return;
+        }
+
+        const notice = new Notice('Pebble Sync: Testing API connection...');
+        try {
+            await requestUrl({
+                url: `${apiUrl}/api/sync/fetch`,
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': settings.apiKey
+                }
+            });
+            notice.setMessage('Pebble Sync: API connection successful!');
+        } catch (error) {
+            console.error('Pebble Sync API test error', error);
+            notice.setMessage(`Pebble Sync: ${this.normalizeError(error)}`);
+        }
+    }
+
     async linkToDailyNote(fileToLink: TFile, noteMoment: any) {
         const cfg = this.getDailyConfig();
         const dailyFileName = `${noteMoment.format(cfg.format)}.md`;
@@ -497,6 +523,14 @@ class PebbleSyncSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     });
                 text.inputEl.type = 'password';
+            });
+
+        new Setting(containerEl)
+            .setName('Test API Connection')
+            .setDesc('Click to verify that your API URL and Key are working correctly.')
+            .addButton(button => {
+                button.setButtonText('Test');
+                button.onClick(() => this.plugin.testApiConnection());
             });
 
         // --- Automation Settings ---

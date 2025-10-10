@@ -252,6 +252,29 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       }
     }
   }
+  async testApiConnection() {
+    const settings = this.settings;
+    const apiUrl = this.normalizeApiUrl(settings.apiUrl);
+    if (!apiUrl || !settings.apiKey) {
+      new import_obsidian.Notice("Pebble Sync: API URL and API Key must be set before testing.");
+      return;
+    }
+    const notice = new import_obsidian.Notice("Pebble Sync: Testing API connection...");
+    try {
+      await (0, import_obsidian.requestUrl)({
+        url: `${apiUrl}/api/sync/fetch`,
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": settings.apiKey
+        }
+      });
+      notice.setMessage("Pebble Sync: API connection successful!");
+    } catch (error) {
+      console.error("Pebble Sync API test error", error);
+      notice.setMessage(`Pebble Sync: ${this.normalizeError(error)}`);
+    }
+  }
   async linkToDailyNote(fileToLink, noteMoment) {
     var _a;
     const cfg = this.getDailyConfig();
@@ -410,6 +433,10 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
       text.inputEl.type = "password";
+    });
+    new import_obsidian.Setting(containerEl).setName("Test API Connection").setDesc("Click to verify that your API URL and Key are working correctly.").addButton((button) => {
+      button.setButtonText("Test");
+      button.onClick(() => this.plugin.testApiConnection());
     });
     containerEl.createEl("h3", { text: "Automation" });
     new import_obsidian.Setting(containerEl).setName("Run on startup").setDesc("Automatically sync when Obsidian starts.").addToggle((t) => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async (v) => {
