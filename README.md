@@ -1,6 +1,6 @@
-# Pebble Sync (Obsidian plugin)
+# Pebble Sync
 
-Pebble Sync pulls notes from your Pebble deployment into Obsidian by turning each item into its own atomic note and (optionally) embedding it back into the matching Daily Note. The plugin is plain JavaScript, ships unbundled, and is ready to distribute through the Obsidian Community Plugins directory.
+Pebble Sync pulls notes from your Pebble deployment into a local notes vault by turning each item into its own atomic note and (optionally) embedding it back into the matching Daily Note. The plugin is plain JavaScript, ships unbundled, and is ready to distribute.
 
 ## Features
 - Import Pebble notes on demand or on an interval; force mode overwrites existing files when needed.
@@ -82,6 +82,8 @@ This plugin is built with TypeScript and uses esbuild for bundling.
    - `styles.css`
    - `README.md`
    - `versions.json`
+
+Tip: run `node scripts/prepare-release.mjs` from the project root to automatically copy those files into the `release/` folder before creating a GitHub release or uploading assets. This helps avoid missing `main.js`/`manifest.json` in a release.
 
 ## Troubleshooting
 - “No new notes” usually means the dedupe cache already contains the items – clear it in Settings if you need to re-import.
