@@ -6,6 +6,5 @@
   "description": "Import Pebble notes into atomic notes and link them back to your daily notes.",
   "author": "sapienskid",
   "authorUrl": "https://github.com/sapienskid",
-  "isDesktopOnly": false,
-  "main": "main.js"
+  "isDesktopOnly": false
 }
