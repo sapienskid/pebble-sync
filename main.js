@@ -78,9 +78,13 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    this.addRibbonIcon("sync", "Pebble Sync: Import new notes", () => this.importNow(false));
-    this.addCommand({ id: "pebble-sync-import-now", name: "Pebble Sync: Import new notes", callback: () => this.importNow(false) });
-    this.addCommand({ id: "pebble-sync-force-import", name: "Pebble Sync: Force re-import (overwrite existing)", callback: () => this.importNow(true) });
+    this.addRibbonIcon("sync", "Import new notes", () => this.importNow(false));
+    this.addCommand({ id: "import-now", name: "Import new notes", callback: () => {
+      this.importNow(false);
+    } });
+    this.addCommand({ id: "force-import", name: "Force re-import (overwrite existing)", callback: () => {
+      this.importNow(true);
+    } });
     this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
     this.setupAutoRun();
     if (this.settings.autoRunOnStartup) {
@@ -130,7 +134,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       // Standalone mode doesn't support templates
     };
   }
-  async processTemplate(template, data) {
+  processTemplate(template, data) {
     const tagString = (data.tags || []).filter((t) => t).join(", ");
     return template.replace(/{{content}}/gi, data.content || "").replace(/{{date}}/gi, data.date || "").replace(/{{time}}/gi, data.time || "").replace(/{{fullDateTime}}/gi, data.fullDateTime || "").replace(/{{tags}}/gi, tagString);
   }
@@ -205,7 +209,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
           fullDateTime: noteMoment.format("YYYY-MM-DD HH:mm"),
           tags: note.tags || []
         };
-        const fileContent = await this.processTemplate(settings.atomicNotesTemplate, templateData);
+        const fileContent = this.processTemplate(settings.atomicNotesTemplate, templateData);
         let atomicFile;
         if (existingFile instanceof import_obsidian.TFile) {
           await this.app.vault.modify(existingFile, fileContent);
@@ -366,22 +370,27 @@ ${embedLink}
     if (typeof error === "string") {
       return error;
     }
-    if (error.response) {
-      const { status, text } = error.response;
-      const preview = typeof text === "string" ? `: ${text.slice(0, 200)}` : "";
-      return `API returned ${status}${preview}`;
-    }
-    if (error.status && error.message) {
-      return `API returned ${error.status}: ${error.message}`;
-    }
-    if (error.message) {
-      if (/network/i.test(error.message)) {
-        return "Network error. Check your connection and URL.";
+    if (typeof error === "object" && error !== null) {
+      const err = error;
+      if (err.response && typeof err.response === "object") {
+        const response = err.response;
+        const status = response.status;
+        const text = response.text;
+        const preview = typeof text === "string" ? `: ${text.slice(0, 200)}` : "";
+        return `API returned ${status}${preview}`;
       }
-      if (/unauthorized|401/i.test(error.message)) {
-        return "Authorization failed. Verify your API key.";
+      if (err.status && err.message) {
+        return `API returned ${err.status}: ${err.message}`;
       }
-      return `Import failed - ${error.message}`;
+      if (typeof err.message === "string") {
+        if (/network/i.test(err.message)) {
+          return "Network error. Check your connection and URL.";
+        }
+        if (/unauthorized|401/i.test(err.message)) {
+          return "Authorization failed. Verify your API key.";
+        }
+        return `Import failed - ${err.message}`;
+      }
     }
     return "Import failed due to an unexpected error.";
   }
@@ -421,24 +430,26 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Pebble Sync Settings" });
-    containerEl.createEl("h3", { text: "API" });
+    new import_obsidian.Setting(containerEl).setName("Pebble Sync Settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("API").setHeading();
     new import_obsidian.Setting(containerEl).setName("API URL").addText((t) => t.setPlaceholder("https://pebble...").setValue(this.plugin.settings.apiUrl).onChange(async (v) => {
       this.plugin.settings.apiUrl = v.trim();
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("API key for authenticating with the Pebble sync service.").addText((text) => {
+    new import_obsidian.Setting(containerEl).setName("API key").setDesc("API key for authenticating with the Pebble sync service.").addText((text) => {
       text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value.trim();
         await this.plugin.saveSettings();
       });
       text.inputEl.type = "password";
     });
-    new import_obsidian.Setting(containerEl).setName("Test API Connection").setDesc("Click to verify that your API URL and Key are working correctly.").addButton((button) => {
+    new import_obsidian.Setting(containerEl).setName("Test API connection").setDesc("Click to verify that your API URL and key are working correctly.").addButton((button) => {
       button.setButtonText("Test");
-      button.onClick(() => this.plugin.testApiConnection());
+      button.onClick(() => {
+        this.plugin.testApiConnection();
+      });
     });
-    containerEl.createEl("h3", { text: "Automation" });
+    new import_obsidian.Setting(containerEl).setName("Automation").setHeading();
     new import_obsidian.Setting(containerEl).setName("Run on startup").setDesc("Automatically sync when Obsidian starts.").addToggle((t) => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async (v) => {
       this.plugin.settings.autoRunOnStartup = v;
       await this.plugin.saveSettings();
@@ -448,7 +459,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
       this.plugin.setupAutoRun();
     }));
-    containerEl.createEl("h3", { text: "Atomic Notes" });
+    new import_obsidian.Setting(containerEl).setName("Atomic notes").setHeading();
     new import_obsidian.Setting(containerEl).setName("Create atomic notes for imports").setDesc("This must be enabled for the plugin to work.").addToggle((t) => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async (v) => {
       this.plugin.settings.atomicNotesEnabled = v;
       await this.plugin.saveSettings();
@@ -473,8 +484,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
           await this.plugin.saveSettings();
         });
         text.inputEl.rows = 8;
-        text.inputEl.style.width = "100%";
-        text.inputEl.style.fontFamily = "monospace";
+        text.inputEl.addClass("pebble-sync-textarea");
       });
       new import_obsidian.Setting(containerEl).setName("Overwrite on force re-import").setDesc('Enable this to allow the "Force re-import" command to overwrite existing notes with the same name.').addToggle((t) => t.setValue(this.plugin.settings.overwriteExisting).onChange(async (v) => {
         this.plugin.settings.overwriteExisting = v;
@@ -489,7 +499,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
         });
       });
     }
-    containerEl.createEl("h3", { text: "Daily Note Integration" });
+    new import_obsidian.Setting(containerEl).setName("Daily note integration").setHeading();
     new import_obsidian.Setting(containerEl).setName("Embed link in daily note").setDesc("Embed created atomic notes in the corresponding daily note.").addToggle((t) => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async (v) => {
       this.plugin.settings.linkBackToDailyNote = v;
       await this.plugin.saveSettings();

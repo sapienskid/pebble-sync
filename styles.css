@@ -1,1 +1,6 @@
-/* optional styles */
+/* Pebble Sync Plugin Styles */
+
+.pebble-sync-textarea {
+    width: 100%;
+    font-family: monospace;
+}
