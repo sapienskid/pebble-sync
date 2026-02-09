@@ -1,5 +1,23 @@
 import { App, Plugin, Notice, normalizePath, moment, Setting, TFile, PluginSettingTab, requestUrl } from 'obsidian';
 
+interface InternalPlugin {
+    enabled: boolean;
+    instance?: {
+        options?: {
+            folder?: string;
+            format?: string;
+            template?: string;
+        };
+    };
+}
+
+interface InternalPlugins {
+    plugins: {
+        'daily-notes'?: InternalPlugin;
+    };
+    getPluginById(id: string): InternalPlugin | undefined;
+}
+
 const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -113,7 +131,7 @@ export default class PebbleSyncPlugin extends Plugin {
         this.setupAutoRun();
         if (this.settings.autoRunOnStartup) {
             // Delay startup import slightly to allow Obsidian to fully load
-            setTimeout(() => this.importNow(false), 2000);
+            void setTimeout(() => this.importNow(false), 2000);
         }
     }
 
@@ -129,7 +147,7 @@ export default class PebbleSyncPlugin extends Plugin {
         }
         if (this.settings.autoRunInterval > 0) {
             const intervalMillis = this.settings.autoRunInterval * 60 * 1000;
-            this.intervalId = window.setInterval(() => this.importNow(false), intervalMillis);
+            this.intervalId = window.setInterval(() => { void this.importNow(false); }, intervalMillis);
             this.registerInterval(this.intervalId);
         }
     }
@@ -144,9 +162,9 @@ export default class PebbleSyncPlugin extends Plugin {
 
     getDailyConfig(): DailyConfig {
         const s = this.settings;
-        if (s.useDailyNotesCore && (this.app as any).internalPlugins?.plugins?.['daily-notes']?.enabled) {
+        if (s.useDailyNotesCore && (this.app as unknown as { internalPlugins: InternalPlugins }).internalPlugins?.plugins?.['daily-notes']?.enabled) {
             try {
-                const coreConfig = (this.app as any).internalPlugins.getPluginById('daily-notes')?.instance?.options;
+                const coreConfig = (this.app as unknown as { internalPlugins: InternalPlugins }).internalPlugins.getPluginById('daily-notes')?.instance?.options;
                 return {
                     folder: coreConfig?.folder?.trim() || '',
                     format: coreConfig?.format || 'YYYY-MM-DD',
@@ -309,7 +327,7 @@ export default class PebbleSyncPlugin extends Plugin {
             importFailed = true;
         } finally {
             if (!importFailed) {
-                setTimeout(() => syncNotice.hide(), 5000);
+                void setTimeout(() => syncNotice.hide(), 5000);
             }
         }
     }
@@ -340,7 +358,7 @@ export default class PebbleSyncPlugin extends Plugin {
         }
     }
 
-    async linkToDailyNote(fileToLink: TFile, noteMoment: any) {
+    async linkToDailyNote(fileToLink: TFile, noteMoment: moment.Moment) {
         const cfg = this.getDailyConfig();
         const dailyFileName = `${noteMoment.format(cfg.format)}.md`;
         const dailyPath = normalizePath((cfg.folder ? `${cfg.folder}/` : '') + dailyFileName);
@@ -448,12 +466,15 @@ export default class PebbleSyncPlugin extends Plugin {
                 const response = err.response as Record<string, unknown>;
                 const status = response.status;
                 const text = response.text;
+                const statusStr = typeof status === 'number' ? status.toString() : 'unknown';
                 const preview = typeof text === 'string' ? `: ${text.slice(0, 200)}` : '';
-                return `API returned ${status}${preview}`;
+                return `API returned ${statusStr}${preview}`;
             }
 
             if (err.status && err.message) {
-                return `API returned ${err.status}: ${err.message}`;
+                const statusStr = typeof err.status === 'number' ? err.status.toString() : 'unknown';
+                const messageStr = typeof err.message === 'string' ? err.message : 'unknown error';
+                return `API returned ${statusStr}: ${messageStr}`;
             }
 
             if (typeof err.message === 'string') {
@@ -511,10 +532,10 @@ class PebbleSyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl).setName('Pebble Sync Settings').setHeading();
+        new Setting(containerEl).setName('Pebble sync').setHeading();
 
         // --- General API Settings ---
-        new Setting(containerEl).setName('API').setHeading();
+        new Setting(containerEl).setName('API configuration').setHeading();
         new Setting(containerEl).setName('API URL').addText(t => t.setPlaceholder('https://pebble...').setValue(this.plugin.settings.apiUrl).onChange(async v => { this.plugin.settings.apiUrl = v.trim(); await this.plugin.saveSettings(); }));
 
         new Setting(containerEl)
@@ -576,7 +597,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName('Embed link in daily note').setDesc('Embed created atomic notes in the corresponding daily note.').addToggle(t => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async v => { this.plugin.settings.linkBackToDailyNote = v; await this.plugin.saveSettings(); this.display(); }));
         if (this.plugin.settings.linkBackToDailyNote) {
             new Setting(containerEl).setName('Section heading').setDesc("The heading to add new embeds under in your daily note.").addText(t => t.setValue(this.plugin.settings.sectionHeading).onChange(async v => { this.plugin.settings.sectionHeading = v; await this.plugin.saveSettings(); }));
-            new Setting(containerEl).setName('Use Daily Notes core plugin settings').setDesc('Strongly recommended. Reads folder and format from the core plugin.').addToggle(t => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async v => { this.plugin.settings.useDailyNotesCore = v; await this.plugin.saveSettings(); this.display(); }));
+            new Setting(containerEl).setName('Use Daily Notes core plugin').setDesc('Strongly recommended. Reads folder and format from the core plugin.').addToggle(t => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async v => { this.plugin.settings.useDailyNotesCore = v; await this.plugin.saveSettings(); this.display(); }));
             if (!this.plugin.settings.useDailyNotesCore) {
                 new Setting(containerEl).setName('Fallback folder for daily notes').addText(t => t.setValue(this.plugin.settings.dailyFolder).onChange(async v => { this.plugin.settings.dailyFolder = v.trim(); await this.plugin.saveSettings(); }));
                 new Setting(containerEl).setName('Fallback daily note date format').addText(t => t.setPlaceholder('YYYY-MM-DD').setValue(this.plugin.settings.dailyFileNameFormat).onChange(async v => { this.plugin.settings.dailyFileNameFormat = v.trim(); await this.plugin.saveSettings(); }));

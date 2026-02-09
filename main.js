@@ -88,7 +88,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
     this.setupAutoRun();
     if (this.settings.autoRunOnStartup) {
-      setTimeout(() => this.importNow(false), 2e3);
+      void setTimeout(() => this.importNow(false), 2e3);
     }
   }
   onunload() {
@@ -102,7 +102,9 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     }
     if (this.settings.autoRunInterval > 0) {
       const intervalMillis = this.settings.autoRunInterval * 60 * 1e3;
-      this.intervalId = window.setInterval(() => this.importNow(false), intervalMillis);
+      this.intervalId = window.setInterval(() => {
+        void this.importNow(false);
+      }, intervalMillis);
       this.registerInterval(this.intervalId);
     }
   }
@@ -252,7 +254,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       importFailed = true;
     } finally {
       if (!importFailed) {
-        setTimeout(() => syncNotice.hide(), 5e3);
+        void setTimeout(() => syncNotice.hide(), 5e3);
       }
     }
   }
@@ -376,11 +378,14 @@ ${embedLink}
         const response = err.response;
         const status = response.status;
         const text = response.text;
+        const statusStr = typeof status === "number" ? status.toString() : "unknown";
         const preview = typeof text === "string" ? `: ${text.slice(0, 200)}` : "";
-        return `API returned ${status}${preview}`;
+        return `API returned ${statusStr}${preview}`;
       }
       if (err.status && err.message) {
-        return `API returned ${err.status}: ${err.message}`;
+        const statusStr = typeof err.status === "number" ? err.status.toString() : "unknown";
+        const messageStr = typeof err.message === "string" ? err.message : "unknown error";
+        return `API returned ${statusStr}: ${messageStr}`;
       }
       if (typeof err.message === "string") {
         if (/network/i.test(err.message)) {
@@ -430,8 +435,8 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Pebble Sync Settings").setHeading();
-    new import_obsidian.Setting(containerEl).setName("API").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Pebble sync").setHeading();
+    new import_obsidian.Setting(containerEl).setName("API configuration").setHeading();
     new import_obsidian.Setting(containerEl).setName("API URL").addText((t) => t.setPlaceholder("https://pebble...").setValue(this.plugin.settings.apiUrl).onChange(async (v) => {
       this.plugin.settings.apiUrl = v.trim();
       await this.plugin.saveSettings();
@@ -510,7 +515,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings.sectionHeading = v;
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Use Daily Notes core plugin settings").setDesc("Strongly recommended. Reads folder and format from the core plugin.").addToggle((t) => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Use Daily Notes core plugin").setDesc("Strongly recommended. Reads folder and format from the core plugin.").addToggle((t) => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async (v) => {
         this.plugin.settings.useDailyNotesCore = v;
         await this.plugin.saveSettings();
         this.display();
