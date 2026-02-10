@@ -80,10 +80,10 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     await this.loadSettings();
     this.addRibbonIcon("sync", "Import new notes", () => this.importNow(false));
     this.addCommand({ id: "import-now", name: "Import new notes", callback: () => {
-      this.importNow(false);
+      void this.importNow(false);
     } });
     this.addCommand({ id: "force-import", name: "Force re-import (overwrite existing)", callback: () => {
-      this.importNow(true);
+      void this.importNow(true);
     } });
     this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
     this.setupAutoRun();
@@ -451,7 +451,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("Test API connection").setDesc("Click to verify that your API URL and key are working correctly.").addButton((button) => {
       button.setButtonText("Test");
       button.onClick(() => {
-        this.plugin.testApiConnection();
+        void this.plugin.testApiConnection();
       });
     });
     new import_obsidian.Setting(containerEl).setName("Automation").setHeading();

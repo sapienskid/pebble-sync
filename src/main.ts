@@ -123,8 +123,8 @@ export default class PebbleSyncPlugin extends Plugin {
 
         this.addRibbonIcon('sync', 'Import new notes', () => this.importNow(false));
 
-        this.addCommand({ id: 'import-now', name: 'Import new notes', callback: () => { this.importNow(false); } });
-        this.addCommand({ id: 'force-import', name: 'Force re-import (overwrite existing)', callback: () => { this.importNow(true); } });
+        this.addCommand({ id: 'import-now', name: 'Import new notes', callback: () => { void this.importNow(false); } });
+        this.addCommand({ id: 'force-import', name: 'Force re-import (overwrite existing)', callback: () => { void this.importNow(true); } });
 
         this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
 
@@ -557,7 +557,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
             .setDesc('Click to verify that your API URL and key are working correctly.')
             .addButton(button => {
                 button.setButtonText('Test');
-                button.onClick(() => { this.plugin.testApiConnection(); });
+                button.onClick(() => { void this.plugin.testApiConnection(); });
             });
 
         // --- Automation Settings ---
