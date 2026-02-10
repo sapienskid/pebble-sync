@@ -131,7 +131,7 @@ export default class PebbleSyncPlugin extends Plugin {
         this.setupAutoRun();
         if (this.settings.autoRunOnStartup) {
             // Delay startup import slightly to allow Obsidian to fully load
-            void setTimeout(() => this.importNow(false), 2000);
+            setTimeout(() => { void this.importNow(false); }, 2000);
         }
     }
 
@@ -153,7 +153,8 @@ export default class PebbleSyncPlugin extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const loadedData: unknown = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData as Partial<PebbleSyncSettings>);
     }
 
     async saveSettings() {
@@ -194,27 +195,27 @@ export default class PebbleSyncPlugin extends Plugin {
         const apiUrl = this.normalizeApiUrl(settings.apiUrl);
 
         if (!apiUrl) {
-            new Notice('Pebble Sync: Configure a valid API URL before syncing.');
+            new Notice('Configure a valid API URL before syncing');
             return;
         }
 
         if (!settings.apiKey) {
-            new Notice('Pebble Sync: API key is required.');
+            new Notice('API key is required');
             return;
         }
 
         if (!settings.atomicNotesEnabled) {
-            new Notice('Pebble Sync: Enable atomic notes to run the importer.');
+            new Notice('Enable atomic notes to run the importer');
             return;
         }
 
         const targetFolder = (settings.atomicNotesFolder || '').trim();
         if (!targetFolder) {
-            new Notice('Pebble Sync: Set a folder for atomic notes in the settings.');
+            new Notice('Set a folder for atomic notes in the settings');
             return;
         }
 
-        const syncNotice = new Notice('Pebble Sync: Fetching notes...', 0);
+        const syncNotice = new Notice('Fetching notes...', 0);
         const storedKeys = new Set(Array.isArray(settings.importedKeys) ? settings.importedKeys : []);
         let keysMutated = false;
         let importFailed = false;
@@ -229,7 +230,7 @@ export default class PebbleSyncPlugin extends Plugin {
                 }
             });
 
-            const payload: PebbleSyncResponse = response.json ?? JSON.parse(response.text);
+            const payload = (response.json as PebbleSyncResponse) ?? JSON.parse(response.text) as PebbleSyncResponse;
             const notes = Array.isArray(payload.items)
                 ? payload.items.filter(item => item?.type === 'note' && typeof item.markdown === 'string')
                 : [];
@@ -337,11 +338,11 @@ export default class PebbleSyncPlugin extends Plugin {
         const apiUrl = this.normalizeApiUrl(settings.apiUrl);
 
         if (!apiUrl || !settings.apiKey) {
-            new Notice('Pebble Sync: API URL and API Key must be set before testing.');
+            new Notice('API URL and API key must be set before testing');
             return;
         }
 
-        const notice = new Notice('Pebble Sync: Testing API connection...');
+        const notice = new Notice('Testing API connection...');
         try {
             await requestUrl({
                 url: `${apiUrl}/api/sync/fetch`,
@@ -351,10 +352,10 @@ export default class PebbleSyncPlugin extends Plugin {
                     'X-API-Key': settings.apiKey
                 }
             });
-            notice.setMessage('Pebble Sync: API connection successful!');
+            notice.setMessage('API connection successful!');
         } catch (error) {
             console.error('Pebble Sync API test error', error);
-            notice.setMessage(`Pebble Sync: ${this.normalizeError(error)}`);
+            notice.setMessage(this.normalizeError(error));
         }
     }
 
@@ -532,15 +533,15 @@ class PebbleSyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl).setName('Pebble sync').setHeading();
+        new Setting(containerEl).setName('Sync').setHeading();
 
-        // --- General API Settings ---
+        // --- General API settings ---
         new Setting(containerEl).setName('API configuration').setHeading();
         new Setting(containerEl).setName('API URL').addText(t => t.setPlaceholder('https://pebble...').setValue(this.plugin.settings.apiUrl).onChange(async v => { this.plugin.settings.apiUrl = v.trim(); await this.plugin.saveSettings(); }));
 
         new Setting(containerEl)
             .setName('API key')
-            .setDesc('API key for authenticating with the Pebble sync service.')
+            .setDesc('API key for authenticating with the sync service')
             .addText(text => {
                 text
                     .setPlaceholder('Enter your API key')
@@ -554,7 +555,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Test API connection')
-            .setDesc('Click to verify that your API URL and key are working correctly.')
+            .setDesc('Click to verify that your API URL and key are working correctly')
             .addButton(button => {
                 button.setButtonText('Test');
                 button.onClick(() => { void this.plugin.testApiConnection(); });
@@ -562,42 +563,42 @@ class PebbleSyncSettingTab extends PluginSettingTab {
 
         // --- Automation Settings ---
         new Setting(containerEl).setName('Automation').setHeading();
-        new Setting(containerEl).setName('Run on startup').setDesc('Automatically sync when Obsidian starts.').addToggle(t => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async v => { this.plugin.settings.autoRunOnStartup = v; await this.plugin.saveSettings(); }));
-        new Setting(containerEl).setName('Automatic sync interval').setDesc('Time in minutes between automatic syncs. Set to 0 to disable.').addText(t => t.setPlaceholder('0').setValue(String(this.plugin.settings.autoRunInterval)).onChange(async v => { this.plugin.settings.autoRunInterval = parseInt(v, 10) || 0; await this.plugin.saveSettings(); this.plugin.setupAutoRun(); }));
+        new Setting(containerEl).setName('Run on startup').setDesc('automatically sync when obsidian starts').addToggle(t => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async v => { this.plugin.settings.autoRunOnStartup = v; await this.plugin.saveSettings(); }));
+        new Setting(containerEl).setName('Automatic sync interval').setDesc('time in minutes between automatic syncs. set to 0 to disable').addText(t => t.setPlaceholder('0').setValue(String(this.plugin.settings.autoRunInterval)).onChange(async v => { this.plugin.settings.autoRunInterval = parseInt(v, 10) || 0; await this.plugin.saveSettings(); this.plugin.setupAutoRun(); }));
 
         // --- Atomic Note Settings ---
         new Setting(containerEl).setName('Atomic notes').setHeading();
-        new Setting(containerEl).setName('Create atomic notes for imports').setDesc('This must be enabled for the plugin to work.').addToggle(t => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async v => { this.plugin.settings.atomicNotesEnabled = v; await this.plugin.saveSettings(); this.display(); }));
+        new Setting(containerEl).setName('Create atomic notes for imports').setDesc('this must be enabled for the plugin to work').addToggle(t => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async v => { this.plugin.settings.atomicNotesEnabled = v; await this.plugin.saveSettings(); this.display(); }));
 
         if (this.plugin.settings.atomicNotesEnabled) {
-            new Setting(containerEl).setName('Folder for atomic notes').addText(t => t.setPlaceholder('Pebble/Ideas').setValue(this.plugin.settings.atomicNotesFolder).onChange(async v => { this.plugin.settings.atomicNotesFolder = v.trim(); await this.plugin.saveSettings(); }));
-            new Setting(containerEl).setName('Trigger tags for special titles').setDesc('Comma-separated. Notes with these tags will use the tag as a title (e.g., "Idea"). Others use the first line of content.').addText(t => t.setPlaceholder('idea, thought, fleeting').setValue(this.plugin.settings.atomicNotesTags).onChange(async v => { this.plugin.settings.atomicNotesTags = v; await this.plugin.saveSettings(); }));
-            new Setting(containerEl).setName('Default tag for title').setDesc('If no trigger tags are found, use this tag for the title. If empty, the first line of the note is used.').addText(t => t.setPlaceholder('pebble').setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async v => { this.plugin.settings.atomicNotesDefaultTag = v.trim(); await this.plugin.saveSettings(); }));
-            new Setting(containerEl).setName('Atomic note template').setDesc('Available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string).').addTextArea(text => {
+            new Setting(containerEl).setName('Folder for atomic notes').addText(t => t.setPlaceholder('pebble/ideas').setValue(this.plugin.settings.atomicNotesFolder).onChange(async v => { this.plugin.settings.atomicNotesFolder = v.trim(); await this.plugin.saveSettings(); }));
+            new Setting(containerEl).setName('Trigger tags for special titles').setDesc('comma-separated list of tags that trigger special titles').addText(t => t.setPlaceholder('idea, thought, fleeting').setValue(this.plugin.settings.atomicNotesTags).onChange(async v => { this.plugin.settings.atomicNotesTags = v; await this.plugin.saveSettings(); }));
+            new Setting(containerEl).setName('Default tag for title').setDesc('if no trigger tags are found, use this tag for the title. if empty, the first line of the note is used').addText(t => t.setPlaceholder('pebble').setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async v => { this.plugin.settings.atomicNotesDefaultTag = v.trim(); await this.plugin.saveSettings(); }));
+            new Setting(containerEl).setName('Atomic note template').setDesc('available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string)').addTextArea(text => {
                 text.setValue(this.plugin.settings.atomicNotesTemplate).onChange(async (v) => { this.plugin.settings.atomicNotesTemplate = v; await this.plugin.saveSettings(); });
                 text.inputEl.rows = 8;
                 text.inputEl.addClass('pebble-sync-textarea');
             });
-            new Setting(containerEl).setName('Overwrite on force re-import').setDesc('Enable this to allow the "Force re-import" command to overwrite existing notes with the same name.').addToggle(t => t.setValue(this.plugin.settings.overwriteExisting).onChange(async v => { this.plugin.settings.overwriteExisting = v; await this.plugin.saveSettings(); }));
-            new Setting(containerEl)
+            new Setting(containerEl).setName('Overwrite on force re-import').setDesc('enable this to allow the force re-import command to overwrite existing notes with the same name').addToggle(t => t.setValue(this.plugin.settings.overwriteExisting).onChange(async v => { this.plugin.settings.overwriteExisting = v; await this.plugin.saveSettings(); }));
+                new Setting(containerEl)
                 .setName('Forget imported history')
-                .setDesc('Clears the deduplication log so every note is eligible for import again.')
+                .setDesc('clears the deduplication log so every note is eligible for import again')
                 .addButton(button => {
                     button.setButtonText('Clear');
                     button.onClick(async () => {
                         this.plugin.settings.importedKeys = [];
                         await this.plugin.saveSettings();
-                        new Notice('Pebble Sync: Import history cleared.');
+                        new Notice('Import history cleared');
                     });
                 });
         }
 
         // --- Daily Note Integration ---
         new Setting(containerEl).setName('Daily note integration').setHeading();
-        new Setting(containerEl).setName('Embed link in daily note').setDesc('Embed created atomic notes in the corresponding daily note.').addToggle(t => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async v => { this.plugin.settings.linkBackToDailyNote = v; await this.plugin.saveSettings(); this.display(); }));
+        new Setting(containerEl).setName('Embed link in daily note').setDesc('embed created atomic notes in the corresponding daily note').addToggle(t => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async v => { this.plugin.settings.linkBackToDailyNote = v; await this.plugin.saveSettings(); this.display(); }));
         if (this.plugin.settings.linkBackToDailyNote) {
-            new Setting(containerEl).setName('Section heading').setDesc("The heading to add new embeds under in your daily note.").addText(t => t.setValue(this.plugin.settings.sectionHeading).onChange(async v => { this.plugin.settings.sectionHeading = v; await this.plugin.saveSettings(); }));
-            new Setting(containerEl).setName('Use Daily Notes core plugin').setDesc('Strongly recommended. Reads folder and format from the core plugin.').addToggle(t => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async v => { this.plugin.settings.useDailyNotesCore = v; await this.plugin.saveSettings(); this.display(); }));
+            new Setting(containerEl).setName('Section heading').setDesc("the heading to add new embeds under in your daily note").addText(t => t.setValue(this.plugin.settings.sectionHeading).onChange(async v => { this.plugin.settings.sectionHeading = v; await this.plugin.saveSettings(); }));
+            new Setting(containerEl).setName('Use Daily Notes core plugin').setDesc('strongly recommended. reads folder and format from the core plugin').addToggle(t => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async v => { this.plugin.settings.useDailyNotesCore = v; await this.plugin.saveSettings(); this.display(); }));
             if (!this.plugin.settings.useDailyNotesCore) {
                 new Setting(containerEl).setName('Fallback folder for daily notes').addText(t => t.setValue(this.plugin.settings.dailyFolder).onChange(async v => { this.plugin.settings.dailyFolder = v.trim(); await this.plugin.saveSettings(); }));
                 new Setting(containerEl).setName('Fallback daily note date format').addText(t => t.setPlaceholder('YYYY-MM-DD').setValue(this.plugin.settings.dailyFileNameFormat).onChange(async v => { this.plugin.settings.dailyFileNameFormat = v.trim(); await this.plugin.saveSettings(); }));

@@ -88,7 +88,9 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
     this.setupAutoRun();
     if (this.settings.autoRunOnStartup) {
-      void setTimeout(() => this.importNow(false), 2e3);
+      setTimeout(() => {
+        void this.importNow(false);
+      }, 2e3);
     }
   }
   onunload() {
@@ -109,7 +111,8 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     }
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loadedData = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -145,23 +148,23 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     const settings = this.settings;
     const apiUrl = this.normalizeApiUrl(settings.apiUrl);
     if (!apiUrl) {
-      new import_obsidian.Notice("Pebble Sync: Configure a valid API URL before syncing.");
+      new import_obsidian.Notice("Configure a valid API URL before syncing");
       return;
     }
     if (!settings.apiKey) {
-      new import_obsidian.Notice("Pebble Sync: API key is required.");
+      new import_obsidian.Notice("API key is required");
       return;
     }
     if (!settings.atomicNotesEnabled) {
-      new import_obsidian.Notice("Pebble Sync: Enable atomic notes to run the importer.");
+      new import_obsidian.Notice("Enable atomic notes to run the importer");
       return;
     }
     const targetFolder = (settings.atomicNotesFolder || "").trim();
     if (!targetFolder) {
-      new import_obsidian.Notice("Pebble Sync: Set a folder for atomic notes in the settings.");
+      new import_obsidian.Notice("Set a folder for atomic notes in the settings");
       return;
     }
-    const syncNotice = new import_obsidian.Notice("Pebble Sync: Fetching notes...", 0);
+    const syncNotice = new import_obsidian.Notice("Fetching notes...", 0);
     const storedKeys = new Set(Array.isArray(settings.importedKeys) ? settings.importedKeys : []);
     let keysMutated = false;
     let importFailed = false;
@@ -262,10 +265,10 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     const settings = this.settings;
     const apiUrl = this.normalizeApiUrl(settings.apiUrl);
     if (!apiUrl || !settings.apiKey) {
-      new import_obsidian.Notice("Pebble Sync: API URL and API Key must be set before testing.");
+      new import_obsidian.Notice("API URL and API key must be set before testing");
       return;
     }
-    const notice = new import_obsidian.Notice("Pebble Sync: Testing API connection...");
+    const notice = new import_obsidian.Notice("Testing API connection...");
     try {
       await (0, import_obsidian.requestUrl)({
         url: `${apiUrl}/api/sync/fetch`,
@@ -275,10 +278,10 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
           "X-API-Key": settings.apiKey
         }
       });
-      notice.setMessage("Pebble Sync: API connection successful!");
+      notice.setMessage("API connection successful!");
     } catch (error) {
       console.error("Pebble Sync API test error", error);
-      notice.setMessage(`Pebble Sync: ${this.normalizeError(error)}`);
+      notice.setMessage(this.normalizeError(error));
     }
   }
   async linkToDailyNote(fileToLink, noteMoment) {
@@ -435,55 +438,55 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Pebble sync").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Sync").setHeading();
     new import_obsidian.Setting(containerEl).setName("API configuration").setHeading();
     new import_obsidian.Setting(containerEl).setName("API URL").addText((t) => t.setPlaceholder("https://pebble...").setValue(this.plugin.settings.apiUrl).onChange(async (v) => {
       this.plugin.settings.apiUrl = v.trim();
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("API key").setDesc("API key for authenticating with the Pebble sync service.").addText((text) => {
+    new import_obsidian.Setting(containerEl).setName("API key").setDesc("API key for authenticating with the sync service").addText((text) => {
       text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value.trim();
         await this.plugin.saveSettings();
       });
       text.inputEl.type = "password";
     });
-    new import_obsidian.Setting(containerEl).setName("Test API connection").setDesc("Click to verify that your API URL and key are working correctly.").addButton((button) => {
+    new import_obsidian.Setting(containerEl).setName("Test API connection").setDesc("Click to verify that your API URL and key are working correctly").addButton((button) => {
       button.setButtonText("Test");
       button.onClick(() => {
         void this.plugin.testApiConnection();
       });
     });
     new import_obsidian.Setting(containerEl).setName("Automation").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Run on startup").setDesc("Automatically sync when Obsidian starts.").addToggle((t) => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName("Run on startup").setDesc("automatically sync when obsidian starts").addToggle((t) => t.setValue(this.plugin.settings.autoRunOnStartup).onChange(async (v) => {
       this.plugin.settings.autoRunOnStartup = v;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Automatic sync interval").setDesc("Time in minutes between automatic syncs. Set to 0 to disable.").addText((t) => t.setPlaceholder("0").setValue(String(this.plugin.settings.autoRunInterval)).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName("Automatic sync interval").setDesc("time in minutes between automatic syncs. set to 0 to disable").addText((t) => t.setPlaceholder("0").setValue(String(this.plugin.settings.autoRunInterval)).onChange(async (v) => {
       this.plugin.settings.autoRunInterval = parseInt(v, 10) || 0;
       await this.plugin.saveSettings();
       this.plugin.setupAutoRun();
     }));
     new import_obsidian.Setting(containerEl).setName("Atomic notes").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Create atomic notes for imports").setDesc("This must be enabled for the plugin to work.").addToggle((t) => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName("Create atomic notes for imports").setDesc("this must be enabled for the plugin to work").addToggle((t) => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async (v) => {
       this.plugin.settings.atomicNotesEnabled = v;
       await this.plugin.saveSettings();
       this.display();
     }));
     if (this.plugin.settings.atomicNotesEnabled) {
-      new import_obsidian.Setting(containerEl).setName("Folder for atomic notes").addText((t) => t.setPlaceholder("Pebble/Ideas").setValue(this.plugin.settings.atomicNotesFolder).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Folder for atomic notes").addText((t) => t.setPlaceholder("pebble/ideas").setValue(this.plugin.settings.atomicNotesFolder).onChange(async (v) => {
         this.plugin.settings.atomicNotesFolder = v.trim();
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Trigger tags for special titles").setDesc('Comma-separated. Notes with these tags will use the tag as a title (e.g., "Idea"). Others use the first line of content.').addText((t) => t.setPlaceholder("idea, thought, fleeting").setValue(this.plugin.settings.atomicNotesTags).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Trigger tags for special titles").setDesc("comma-separated list of tags that trigger special titles").addText((t) => t.setPlaceholder("idea, thought, fleeting").setValue(this.plugin.settings.atomicNotesTags).onChange(async (v) => {
         this.plugin.settings.atomicNotesTags = v;
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Default tag for title").setDesc("If no trigger tags are found, use this tag for the title. If empty, the first line of the note is used.").addText((t) => t.setPlaceholder("pebble").setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Default tag for title").setDesc("if no trigger tags are found, use this tag for the title. if empty, the first line of the note is used").addText((t) => t.setPlaceholder("pebble").setValue(this.plugin.settings.atomicNotesDefaultTag).onChange(async (v) => {
         this.plugin.settings.atomicNotesDefaultTag = v.trim();
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Atomic note template").setDesc("Available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string).").addTextArea((text) => {
+      new import_obsidian.Setting(containerEl).setName("Atomic note template").setDesc("available variables: {{content}}, {{date}}, {{time}}, {{fullDateTime}}, {{tags}} (comma-separated string)").addTextArea((text) => {
         text.setValue(this.plugin.settings.atomicNotesTemplate).onChange(async (v) => {
           this.plugin.settings.atomicNotesTemplate = v;
           await this.plugin.saveSettings();
@@ -491,31 +494,31 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
         text.inputEl.rows = 8;
         text.inputEl.addClass("pebble-sync-textarea");
       });
-      new import_obsidian.Setting(containerEl).setName("Overwrite on force re-import").setDesc('Enable this to allow the "Force re-import" command to overwrite existing notes with the same name.').addToggle((t) => t.setValue(this.plugin.settings.overwriteExisting).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Overwrite on force re-import").setDesc("enable this to allow the force re-import command to overwrite existing notes with the same name").addToggle((t) => t.setValue(this.plugin.settings.overwriteExisting).onChange(async (v) => {
         this.plugin.settings.overwriteExisting = v;
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Forget imported history").setDesc("Clears the deduplication log so every note is eligible for import again.").addButton((button) => {
+      new import_obsidian.Setting(containerEl).setName("Forget imported history").setDesc("clears the deduplication log so every note is eligible for import again").addButton((button) => {
         button.setButtonText("Clear");
         button.onClick(async () => {
           this.plugin.settings.importedKeys = [];
           await this.plugin.saveSettings();
-          new import_obsidian.Notice("Pebble Sync: Import history cleared.");
+          new import_obsidian.Notice("Import history cleared");
         });
       });
     }
     new import_obsidian.Setting(containerEl).setName("Daily note integration").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Embed link in daily note").setDesc("Embed created atomic notes in the corresponding daily note.").addToggle((t) => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName("Embed link in daily note").setDesc("embed created atomic notes in the corresponding daily note").addToggle((t) => t.setValue(this.plugin.settings.linkBackToDailyNote).onChange(async (v) => {
       this.plugin.settings.linkBackToDailyNote = v;
       await this.plugin.saveSettings();
       this.display();
     }));
     if (this.plugin.settings.linkBackToDailyNote) {
-      new import_obsidian.Setting(containerEl).setName("Section heading").setDesc("The heading to add new embeds under in your daily note.").addText((t) => t.setValue(this.plugin.settings.sectionHeading).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Section heading").setDesc("the heading to add new embeds under in your daily note").addText((t) => t.setValue(this.plugin.settings.sectionHeading).onChange(async (v) => {
         this.plugin.settings.sectionHeading = v;
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("Use Daily Notes core plugin").setDesc("Strongly recommended. Reads folder and format from the core plugin.").addToggle((t) => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async (v) => {
+      new import_obsidian.Setting(containerEl).setName("Use Daily Notes core plugin").setDesc("strongly recommended. reads folder and format from the core plugin").addToggle((t) => t.setValue(this.plugin.settings.useDailyNotesCore).onChange(async (v) => {
         this.plugin.settings.useDailyNotesCore = v;
         await this.plugin.saveSettings();
         this.display();
