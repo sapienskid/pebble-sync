@@ -1,4 +1,4 @@
-import { App, Plugin, Notice, normalizePath, moment, Setting, TFile, PluginSettingTab, requestUrl } from 'obsidian';
+import { App, Plugin, Notice, normalizePath, moment, Setting, TFile, PluginSettingTab, requestUrl, type RequestUrlResponse } from 'obsidian';
 
 interface InternalPlugin {
     enabled: boolean;
@@ -227,10 +227,15 @@ export default class PebbleSyncPlugin extends Plugin {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': settings.apiKey
-                }
+                },
+                throw: false
             });
 
-            const payload = (response.json as PebbleSyncResponse) ?? JSON.parse(response.text) as PebbleSyncResponse;
+            if (response.status >= 400) {
+                throw new Error(this.formatApiError(response));
+            }
+
+            const payload = this.parseSyncResponse(response);
             const notes = Array.isArray(payload.items)
                 ? payload.items.filter(item => item?.type === 'note' && typeof item.markdown === 'string')
                 : [];
@@ -344,14 +349,22 @@ export default class PebbleSyncPlugin extends Plugin {
 
         const notice = new Notice('Testing API connection...');
         try {
-            await requestUrl({
+            const response = await requestUrl({
                 url: `${apiUrl}/api/sync/fetch`,
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': settings.apiKey
-                }
+                },
+                throw: false
             });
+
+            if (response.status >= 400) {
+                notice.setMessage(this.formatApiError(response));
+                return;
+            }
+
+            this.parseSyncResponse(response);
             notice.setMessage('API connection successful!');
         } catch (error) {
             console.error('Pebble Sync API test error', error);
@@ -451,6 +464,68 @@ export default class PebbleSyncPlugin extends Plugin {
         return [timestamp, identifier, hash].filter(Boolean).join('|');
     }
 
+    parseSyncResponse(response: RequestUrlResponse): PebbleSyncResponse {
+        if (response.json && typeof response.json === 'object') {
+            return response.json as PebbleSyncResponse;
+        }
+
+        const rawText = (response.text || '').trim();
+        if (!rawText) {
+            return { items: [] };
+        }
+
+        try {
+            return JSON.parse(rawText) as PebbleSyncResponse;
+        } catch {
+            throw new Error('API returned an invalid JSON payload');
+        }
+    }
+
+    extractApiErrorMessage(response: RequestUrlResponse): string {
+        if (response.json && typeof response.json === 'object') {
+            const payload = response.json as Record<string, unknown>;
+            if (typeof payload.message === 'string' && payload.message.trim()) {
+                return payload.message.trim();
+            }
+            if (typeof payload.error === 'string' && payload.error.trim()) {
+                return payload.error.trim();
+            }
+        }
+
+        const rawText = (response.text || '').trim();
+        if (!rawText) {
+            return '';
+        }
+
+        try {
+            const payload = JSON.parse(rawText) as Record<string, unknown>;
+            if (typeof payload.message === 'string' && payload.message.trim()) {
+                return payload.message.trim();
+            }
+            if (typeof payload.error === 'string' && payload.error.trim()) {
+                return payload.error.trim();
+            }
+        } catch {
+            // Fall through to text preview for non-JSON error payloads.
+        }
+
+        return rawText.slice(0, 200);
+    }
+
+    formatApiError(response: RequestUrlResponse): string {
+        const detail = this.extractApiErrorMessage(response);
+        const base = detail ? `API returned ${response.status}: ${detail}` : `API returned ${response.status}`;
+
+        if (
+            response.status >= 500 &&
+            /backend not configured|server environment not available/i.test(detail)
+        ) {
+            return `${base}. Check Cloudflare Worker API_KEY secret and PEBBLE_SYNC_KV binding.`;
+        }
+
+        return base;
+    }
+
     normalizeError(error: unknown): string {
         if (!error) {
             return 'Unknown error during import.';
@@ -479,6 +554,9 @@ export default class PebbleSyncPlugin extends Plugin {
             }
 
             if (typeof err.message === 'string') {
+                if (err.message.startsWith('API returned')) {
+                    return err.message;
+                }
                 if (/network/i.test(err.message)) {
                     return 'Network error. Check your connection and URL.';
                 }
