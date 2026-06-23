@@ -1,6 +1,6 @@
 {
   "name": "pebble-sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Import Pebble notes into atomic notes and link them back to your daily notes.",
   "main": "main.js",
   "scripts": {
