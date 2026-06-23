@@ -1,6 +1,6 @@
 {
   "name": "pebble-sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Import Pebble notes into atomic notes and link them back to your daily notes.",
   "main": "main.js",
   "scripts": {
@@ -23,7 +23,6 @@
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
     "@types/node": "^20.11.16",
     "@typescript-eslint/parser": "^8.55.0",
-    "builtin-modules": "^3.3.0",
     "esbuild": "0.19.12",
     "eslint": "^9.39.2",
     "eslint-plugin-depend": "^1.4.0",

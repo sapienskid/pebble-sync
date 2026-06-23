@@ -114,6 +114,10 @@ tags: [pebble, {{tags}}]
     dailyFileNameFormat: 'YYYY-MM-DD', // Fallback
 };
 
+function hasInternalPlugins(app: App): app is App & Record<'internalPlugins', InternalPlugins> {
+    return 'internalPlugins' in app;
+}
+
 export default class PebbleSyncPlugin extends Plugin {
     settings!: PebbleSyncSettings;
     intervalId: number | null = null;
@@ -131,7 +135,7 @@ export default class PebbleSyncPlugin extends Plugin {
         this.setupAutoRun();
         if (this.settings.autoRunOnStartup) {
             // Delay startup import slightly to allow Obsidian to fully load
-            setTimeout(() => { void this.importNow(false); }, 2000);
+            window.setTimeout(() => { void this.importNow(false); }, 2000);
         }
     }
 
@@ -163,9 +167,9 @@ export default class PebbleSyncPlugin extends Plugin {
 
     getDailyConfig(): DailyConfig {
         const s = this.settings;
-        if (s.useDailyNotesCore && (this.app as unknown as { internalPlugins: InternalPlugins }).internalPlugins?.plugins?.['daily-notes']?.enabled) {
+        if (s.useDailyNotesCore && hasInternalPlugins(this.app) && this.app.internalPlugins.plugins?.['daily-notes']?.enabled) {
             try {
-                const coreConfig = (this.app as unknown as { internalPlugins: InternalPlugins }).internalPlugins.getPluginById('daily-notes')?.instance?.options;
+                const coreConfig = this.app.internalPlugins.getPluginById('daily-notes')?.instance?.options;
                 return {
                     folder: coreConfig?.folder?.trim() || '',
                     format: coreConfig?.format || 'YYYY-MM-DD',
@@ -333,7 +337,7 @@ export default class PebbleSyncPlugin extends Plugin {
             importFailed = true;
         } finally {
             if (!importFailed) {
-                void setTimeout(() => syncNotice.hide(), 5000);
+                void window.setTimeout(() => syncNotice.hide(), 5000);
             }
         }
     }
@@ -611,7 +615,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl).setName('Sync').setHeading();
+        new Setting(containerEl).setName('Import').setHeading();
 
         // --- General API settings ---
         new Setting(containerEl).setName('API configuration').setHeading();
@@ -663,10 +667,11 @@ class PebbleSyncSettingTab extends PluginSettingTab {
                 .setDesc('Clears the deduplication log so every note is eligible for import again')
                 .addButton(button => {
                     button.setButtonText('Clear');
-                    button.onClick(async () => {
+                    button.onClick(() => {
                         this.plugin.settings.importedKeys = [];
-                        await this.plugin.saveSettings();
-                        new Notice('Import history cleared');
+                        void this.plugin.saveSettings().then(() => {
+                            new Notice('Import history cleared');
+                        });
                     });
                 });
         }

@@ -71,6 +71,9 @@ tags: [pebble, {{tags}}]
   dailyFileNameFormat: "YYYY-MM-DD"
   // Fallback
 };
+function hasInternalPlugins(app) {
+  return "internalPlugins" in app;
+}
 var PebbleSyncPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -88,7 +91,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     this.addSettingTab(new PebbleSyncSettingTab(this.app, this));
     this.setupAutoRun();
     if (this.settings.autoRunOnStartup) {
-      setTimeout(() => {
+      window.setTimeout(() => {
         void this.importNow(false);
       }, 2e3);
     }
@@ -118,15 +121,15 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
     await this.saveData(this.settings);
   }
   getDailyConfig() {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f;
     const s = this.settings;
-    if (s.useDailyNotesCore && ((_c = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["daily-notes"]) == null ? void 0 : _c.enabled)) {
+    if (s.useDailyNotesCore && hasInternalPlugins(this.app) && ((_b = (_a = this.app.internalPlugins.plugins) == null ? void 0 : _a["daily-notes"]) == null ? void 0 : _b.enabled)) {
       try {
-        const coreConfig = (_e = (_d = this.app.internalPlugins.getPluginById("daily-notes")) == null ? void 0 : _d.instance) == null ? void 0 : _e.options;
+        const coreConfig = (_d = (_c = this.app.internalPlugins.getPluginById("daily-notes")) == null ? void 0 : _c.instance) == null ? void 0 : _d.options;
         return {
-          folder: ((_f = coreConfig == null ? void 0 : coreConfig.folder) == null ? void 0 : _f.trim()) || "",
+          folder: ((_e = coreConfig == null ? void 0 : coreConfig.folder) == null ? void 0 : _e.trim()) || "",
           format: (coreConfig == null ? void 0 : coreConfig.format) || "YYYY-MM-DD",
-          template: ((_g = coreConfig == null ? void 0 : coreConfig.template) == null ? void 0 : _g.trim()) || ""
+          template: ((_f = coreConfig == null ? void 0 : coreConfig.template) == null ? void 0 : _f.trim()) || ""
         };
       } catch (e) {
         console.error("Pebble Sync: Error reading Daily Notes core config", e);
@@ -260,7 +263,7 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       importFailed = true;
     } finally {
       if (!importFailed) {
-        void setTimeout(() => syncNotice.hide(), 5e3);
+        void window.setTimeout(() => syncNotice.hide(), 5e3);
       }
     }
   }
@@ -498,7 +501,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Sync").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Import").setHeading();
     new import_obsidian.Setting(containerEl).setName("API configuration").setHeading();
     new import_obsidian.Setting(containerEl).setName("API URL").addText((t) => t.setPlaceholder("Enter API URL").setValue(this.plugin.settings.apiUrl).onChange(async (v) => {
       this.plugin.settings.apiUrl = v.trim();
@@ -560,10 +563,11 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
       }));
       new import_obsidian.Setting(containerEl).setName("Forget imported history").setDesc("Clears the deduplication log so every note is eligible for import again").addButton((button) => {
         button.setButtonText("Clear");
-        button.onClick(async () => {
+        button.onClick(() => {
           this.plugin.settings.importedKeys = [];
-          await this.plugin.saveSettings();
-          new import_obsidian.Notice("Import history cleared");
+          void this.plugin.saveSettings().then(() => {
+            new import_obsidian.Notice("Import history cleared");
+          });
         });
       });
     }
