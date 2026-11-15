@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: PebbleSyncSettings = {
     autoRunInterval: 0, // In minutes, 0 disables
 
     // --- Atomic Notes ---
-    atomicNotesEnabled: true,
+    atomicNotesEnabled: false,
     atomicNotesFolder: 'Pebble',
     atomicNotesTags: 'idea,thought',
     atomicNotesDefaultTag: 'pebble',
@@ -208,13 +208,8 @@ export default class PebbleSyncPlugin extends Plugin {
             return;
         }
 
-        if (!settings.atomicNotesEnabled) {
-            new Notice('Enable atomic notes to run the importer');
-            return;
-        }
-
         const targetFolder = (settings.atomicNotesFolder || '').trim();
-        if (!targetFolder) {
+        if (settings.atomicNotesEnabled && !targetFolder) {
             new Notice('Set a folder for atomic notes in the settings');
             return;
         }
@@ -250,7 +245,9 @@ export default class PebbleSyncPlugin extends Plugin {
             }
 
             syncNotice.setMessage(`Pebble Sync: Importing ${notes.length} notes...`);
-            await this.ensureFolder(targetFolder);
+            if (settings.atomicNotesEnabled) {
+                await this.ensureFolder(targetFolder);
+            }
 
             const triggerTags = new Set((settings.atomicNotesTags || '')
                 .split(',')
@@ -270,6 +267,21 @@ export default class PebbleSyncPlugin extends Plugin {
                 }
 
                 const noteMoment = this.resolveNoteMoment(note.createdAt);
+
+                // Direct Daily Note Mode: Consolidates notes into one Daily Note per date
+                if (!settings.atomicNotesEnabled) {
+                    const appended = await this.appendToDailyNote(note, noteMoment);
+                    if (appended) {
+                        createdCount++;
+                    } else {
+                        skippedExisting++;
+                    }
+                    storedKeys.add(dedupeKey);
+                    keysMutated = true;
+                    continue;
+                }
+
+                // Atomic Note Mode
                 const baseName = this.resolveBaseName(note, triggerTags);
                 const relativePath = `${baseName} ${noteMoment.format('dddd, MMMM Do YYYY HH-mm')}.md`;
                 const fileName = normalizePath(targetFolder ? `${targetFolder}/${relativePath}` : relativePath);
@@ -319,10 +331,16 @@ export default class PebbleSyncPlugin extends Plugin {
 
             let message = 'Pebble Sync: Import complete.';
             const details = [];
-            if (createdCount > 0) details.push(`created ${createdCount} new notes`);
-            if (updatedCount > 0) details.push(`updated ${updatedCount} notes`);
-            if (skippedDuplicates > 0) details.push(`skipped ${skippedDuplicates} duplicates`);
-            if (skippedExisting > 0) details.push(`skipped ${skippedExisting} existing notes`);
+            if (!settings.atomicNotesEnabled) {
+                if (createdCount > 0) details.push(`appended ${createdCount} notes to daily notes`);
+                if (skippedDuplicates > 0) details.push(`skipped ${skippedDuplicates} duplicates`);
+                if (skippedExisting > 0) details.push(`skipped ${skippedExisting} existing notes`);
+            } else {
+                if (createdCount > 0) details.push(`created ${createdCount} new notes`);
+                if (updatedCount > 0) details.push(`updated ${updatedCount} notes`);
+                if (skippedDuplicates > 0) details.push(`skipped ${skippedDuplicates} duplicates`);
+                if (skippedExisting > 0) details.push(`skipped ${skippedExisting} existing notes`);
+            }
 
             if (details.length === 0) {
                 message = 'Pebble Sync: Nothing new to import.';
@@ -414,6 +432,60 @@ export default class PebbleSyncPlugin extends Plugin {
             const snippet = `\n\n${headingLine}\n${embedLink}\n`;
             await this.app.vault.append(dailyFile, snippet);
         }
+    }
+
+    async appendToDailyNote(note: PebbleNote, noteMoment: moment.Moment): Promise<boolean> {
+        const cfg = this.getDailyConfig();
+        const dailyFileName = `${noteMoment.format(cfg.format)}.md`;
+        const dailyPath = normalizePath((cfg.folder ? `${cfg.folder}/` : '') + dailyFileName);
+
+        const dailyFile = await this.ensureDailyFile(dailyPath, cfg);
+        if (!dailyFile) return false;
+
+        const currentContent = await this.app.vault.read(dailyFile);
+        const timeStr = noteMoment.format('HH:mm');
+        const tagSuffix = (note.tags && note.tags.length > 0)
+            ? ' ' + note.tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')
+            : '';
+
+        const rawContent = (note.markdown || '').trim();
+        const lines = rawContent.split('\n');
+        let formattedEntry: string;
+        if (lines.length <= 1) {
+            formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}`;
+        } else {
+            formattedEntry = `- [${timeStr}] ${lines[0]}\n` + lines.slice(1).map(l => `  ${l}`).join('\n') + (tagSuffix ? `\n  ${tagSuffix}` : '');
+        }
+
+        // Avoid duplicate entry if already present
+        if (currentContent.includes(`- [${timeStr}] ${lines[0]}`) || (rawContent.length > 15 && currentContent.includes(rawContent))) {
+            return false;
+        }
+
+        const headingSetting = this.settings.sectionHeading.trim();
+        const headingText = headingSetting.replace(/^#+\s*/, '').trim() || 'Pebble Imports';
+        const headingLine = headingSetting || `## ${headingText}`;
+        const headingPattern = '^#+\\s+' + escapeRegExp(headingText) + '\\s*$';
+        const headingRegex = new RegExp(headingPattern, 'mi');
+
+        if (headingRegex.test(currentContent)) {
+            const docLines = currentContent.split('\n');
+            const headingIndex = docLines.findIndex(line => headingRegex.test(line));
+            let insertIndex = headingIndex + 1;
+
+            while (insertIndex < docLines.length && !/^#+\s/.test(docLines[insertIndex])) {
+                insertIndex++;
+            }
+
+            const insertion = formattedEntry.split('\n');
+            docLines.splice(insertIndex, 0, ...insertion);
+            await this.app.vault.modify(dailyFile, docLines.join('\n'));
+        } else {
+            const snippet = `\n\n${headingLine}\n${formattedEntry}\n`;
+            await this.app.vault.append(dailyFile, snippet);
+        }
+
+        return true;
     }
 
     normalizeApiUrl(rawUrl: string): string {
@@ -650,7 +722,7 @@ class PebbleSyncSettingTab extends PluginSettingTab {
 
         // --- Atomic Note Settings ---
         new Setting(containerEl).setName('Atomic notes').setHeading();
-        new Setting(containerEl).setName('Create atomic notes for imports').setDesc('This must be enabled for the plugin to work').addToggle(t => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async v => { this.plugin.settings.atomicNotesEnabled = v; await this.plugin.saveSettings(); this.display(); }));
+        new Setting(containerEl).setName('Create atomic notes for imports').setDesc('Create separate files in the atomic notes folder when enabled. When disabled, imports notes directly into your daily note').addToggle(t => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async v => { this.plugin.settings.atomicNotesEnabled = v; await this.plugin.saveSettings(); this.display(); }));
 
         if (this.plugin.settings.atomicNotesEnabled) {
             new Setting(containerEl).setName('Folder for atomic notes').setDesc('Folder where atomic notes will be created').addText(t => t.setPlaceholder('Pebble/ideas').setValue(this.plugin.settings.atomicNotesFolder).onChange(async v => { this.plugin.settings.atomicNotesFolder = v.trim(); await this.plugin.saveSettings(); }));

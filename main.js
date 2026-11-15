@@ -51,7 +51,7 @@ var DEFAULT_SETTINGS = {
   autoRunInterval: 0,
   // In minutes, 0 disables
   // --- Atomic Notes ---
-  atomicNotesEnabled: true,
+  atomicNotesEnabled: false,
   atomicNotesFolder: "Pebble",
   atomicNotesTags: "idea,thought",
   atomicNotesDefaultTag: "pebble",
@@ -157,12 +157,8 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       new import_obsidian.Notice("API key is required");
       return;
     }
-    if (!settings.atomicNotesEnabled) {
-      new import_obsidian.Notice("Enable atomic notes to run the importer");
-      return;
-    }
     const targetFolder = (settings.atomicNotesFolder || "").trim();
-    if (!targetFolder) {
+    if (settings.atomicNotesEnabled && !targetFolder) {
       new import_obsidian.Notice("Set a folder for atomic notes in the settings");
       return;
     }
@@ -190,7 +186,9 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
         return;
       }
       syncNotice.setMessage(`Pebble Sync: Importing ${notes.length} notes...`);
-      await this.ensureFolder(targetFolder);
+      if (settings.atomicNotesEnabled) {
+        await this.ensureFolder(targetFolder);
+      }
       const triggerTags = new Set((settings.atomicNotesTags || "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean));
       let createdCount = 0;
       let updatedCount = 0;
@@ -203,6 +201,17 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
           continue;
         }
         const noteMoment = this.resolveNoteMoment(note.createdAt);
+        if (!settings.atomicNotesEnabled) {
+          const appended = await this.appendToDailyNote(note, noteMoment);
+          if (appended) {
+            createdCount++;
+          } else {
+            skippedExisting++;
+          }
+          storedKeys.add(dedupeKey);
+          keysMutated = true;
+          continue;
+        }
         const baseName = this.resolveBaseName(note, triggerTags);
         const relativePath = `${baseName} ${noteMoment.format("dddd, MMMM Do YYYY HH-mm")}.md`;
         const fileName = (0, import_obsidian.normalizePath)(targetFolder ? `${targetFolder}/${relativePath}` : relativePath);
@@ -243,14 +252,23 @@ var PebbleSyncPlugin = class extends import_obsidian.Plugin {
       }
       let message = "Pebble Sync: Import complete.";
       const details = [];
-      if (createdCount > 0)
-        details.push(`created ${createdCount} new notes`);
-      if (updatedCount > 0)
-        details.push(`updated ${updatedCount} notes`);
-      if (skippedDuplicates > 0)
-        details.push(`skipped ${skippedDuplicates} duplicates`);
-      if (skippedExisting > 0)
-        details.push(`skipped ${skippedExisting} existing notes`);
+      if (!settings.atomicNotesEnabled) {
+        if (createdCount > 0)
+          details.push(`appended ${createdCount} notes to daily notes`);
+        if (skippedDuplicates > 0)
+          details.push(`skipped ${skippedDuplicates} duplicates`);
+        if (skippedExisting > 0)
+          details.push(`skipped ${skippedExisting} existing notes`);
+      } else {
+        if (createdCount > 0)
+          details.push(`created ${createdCount} new notes`);
+        if (updatedCount > 0)
+          details.push(`updated ${updatedCount} notes`);
+        if (skippedDuplicates > 0)
+          details.push(`skipped ${skippedDuplicates} duplicates`);
+        if (skippedExisting > 0)
+          details.push(`skipped ${skippedExisting} existing notes`);
+      }
       if (details.length === 0) {
         message = "Pebble Sync: Nothing new to import.";
       } else {
@@ -335,6 +353,54 @@ ${embedLink}
 `;
       await this.app.vault.append(dailyFile, snippet);
     }
+  }
+  async appendToDailyNote(note, noteMoment) {
+    const cfg = this.getDailyConfig();
+    const dailyFileName = `${noteMoment.format(cfg.format)}.md`;
+    const dailyPath = (0, import_obsidian.normalizePath)((cfg.folder ? `${cfg.folder}/` : "") + dailyFileName);
+    const dailyFile = await this.ensureDailyFile(dailyPath, cfg);
+    if (!dailyFile)
+      return false;
+    const currentContent = await this.app.vault.read(dailyFile);
+    const timeStr = noteMoment.format("HH:mm");
+    const tagSuffix = note.tags && note.tags.length > 0 ? " " + note.tags.map((t) => t.startsWith("#") ? t : `#${t}`).join(" ") : "";
+    const rawContent = (note.markdown || "").trim();
+    const lines = rawContent.split("\n");
+    let formattedEntry;
+    if (lines.length <= 1) {
+      formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}`;
+    } else {
+      formattedEntry = `- [${timeStr}] ${lines[0]}
+` + lines.slice(1).map((l) => `  ${l}`).join("\n") + (tagSuffix ? `
+  ${tagSuffix}` : "");
+    }
+    if (currentContent.includes(`- [${timeStr}] ${lines[0]}`) || rawContent.length > 15 && currentContent.includes(rawContent)) {
+      return false;
+    }
+    const headingSetting = this.settings.sectionHeading.trim();
+    const headingText = headingSetting.replace(/^#+\s*/, "").trim() || "Pebble Imports";
+    const headingLine = headingSetting || `## ${headingText}`;
+    const headingPattern = "^#+\\s+" + escapeRegExp(headingText) + "\\s*$";
+    const headingRegex = new RegExp(headingPattern, "mi");
+    if (headingRegex.test(currentContent)) {
+      const docLines = currentContent.split("\n");
+      const headingIndex = docLines.findIndex((line) => headingRegex.test(line));
+      let insertIndex = headingIndex + 1;
+      while (insertIndex < docLines.length && !/^#+\s/.test(docLines[insertIndex])) {
+        insertIndex++;
+      }
+      const insertion = formattedEntry.split("\n");
+      docLines.splice(insertIndex, 0, ...insertion);
+      await this.app.vault.modify(dailyFile, docLines.join("\n"));
+    } else {
+      const snippet = `
+
+${headingLine}
+${formattedEntry}
+`;
+      await this.app.vault.append(dailyFile, snippet);
+    }
+    return true;
   }
   normalizeApiUrl(rawUrl) {
     if (!rawUrl)
@@ -531,7 +597,7 @@ var PebbleSyncSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.setupAutoRun();
     }));
     new import_obsidian.Setting(containerEl).setName("Atomic notes").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Create atomic notes for imports").setDesc("This must be enabled for the plugin to work").addToggle((t) => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName("Create atomic notes for imports").setDesc("Create separate files in the atomic notes folder when enabled. When disabled, imports notes directly into your daily note").addToggle((t) => t.setValue(this.plugin.settings.atomicNotesEnabled).onChange(async (v) => {
       this.plugin.settings.atomicNotesEnabled = v;
       await this.plugin.saveSettings();
       this.display();
