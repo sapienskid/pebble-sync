@@ -448,13 +448,34 @@ export default class PebbleSyncPlugin extends Plugin {
             ? ' ' + note.tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')
             : '';
 
+        const noteId = note.id || note.uuid || note.key || '';
+        const marker = noteId ? ` <!-- cairn:${noteId} -->` : '';
+
         const rawContent = (note.markdown || '').trim();
         const lines = rawContent.split('\n');
         let formattedEntry: string;
-        if (lines.length <= 1) {
-            formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}`;
+
+        if (lines[0].trimStart().startsWith('- [')) {
+            // Markdown checklist task (e.g. - [ ] Task or - [x] Done)
+            formattedEntry = `${lines[0]}${tagSuffix}${marker}`;
+            if (lines.length > 1) {
+                formattedEntry += '\n' + lines.slice(1).map(l => `  ${l}`).join('\n');
+            }
+        } else if (lines.length <= 1) {
+            formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}${marker}`;
         } else {
-            formattedEntry = `- [${timeStr}] ${lines[0]}\n` + lines.slice(1).map(l => `  ${l}`).join('\n') + (tagSuffix ? `\n  ${tagSuffix}` : '');
+            formattedEntry = `- [${timeStr}] ${lines[0]}\n` + lines.slice(1).map(l => `  ${l}`).join('\n') + (tagSuffix ? `\n  ${tagSuffix}` : '') + marker;
+        }
+
+        // If note was edited, update existing line in-place
+        if (noteId && currentContent.includes(`<!-- cairn:${noteId} -->`)) {
+            const docLines = currentContent.split('\n');
+            const targetLineIndex = docLines.findIndex(l => l.includes(`<!-- cairn:${noteId} -->`));
+            if (targetLineIndex !== -1) {
+                docLines[targetLineIndex] = formattedEntry;
+                await this.app.vault.modify(dailyFile, docLines.join('\n'));
+                return true;
+            }
         }
 
         // Avoid duplicate entry if already present

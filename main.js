@@ -364,15 +364,31 @@ ${embedLink}
     const currentContent = await this.app.vault.read(dailyFile);
     const timeStr = noteMoment.format("HH:mm");
     const tagSuffix = note.tags && note.tags.length > 0 ? " " + note.tags.map((t) => t.startsWith("#") ? t : `#${t}`).join(" ") : "";
+    const noteId = note.id || note.uuid || note.key || "";
+    const marker = noteId ? ` <!-- cairn:${noteId} -->` : "";
     const rawContent = (note.markdown || "").trim();
     const lines = rawContent.split("\n");
     let formattedEntry;
-    if (lines.length <= 1) {
-      formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}`;
+    if (lines[0].trimStart().startsWith("- [")) {
+      formattedEntry = `${lines[0]}${tagSuffix}${marker}`;
+      if (lines.length > 1) {
+        formattedEntry += "\n" + lines.slice(1).map((l) => `  ${l}`).join("\n");
+      }
+    } else if (lines.length <= 1) {
+      formattedEntry = `- [${timeStr}] ${rawContent}${tagSuffix}${marker}`;
     } else {
       formattedEntry = `- [${timeStr}] ${lines[0]}
 ` + lines.slice(1).map((l) => `  ${l}`).join("\n") + (tagSuffix ? `
-  ${tagSuffix}` : "");
+  ${tagSuffix}` : "") + marker;
+    }
+    if (noteId && currentContent.includes(`<!-- cairn:${noteId} -->`)) {
+      const docLines = currentContent.split("\n");
+      const targetLineIndex = docLines.findIndex((l) => l.includes(`<!-- cairn:${noteId} -->`));
+      if (targetLineIndex !== -1) {
+        docLines[targetLineIndex] = formattedEntry;
+        await this.app.vault.modify(dailyFile, docLines.join("\n"));
+        return true;
+      }
     }
     if (currentContent.includes(`- [${timeStr}] ${lines[0]}`) || rawContent.length > 15 && currentContent.includes(rawContent)) {
       return false;
